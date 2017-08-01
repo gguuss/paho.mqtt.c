@@ -3,11 +3,11 @@
  *
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
- * and Eclipse Distribution License v1.0 which accompany this distribution. 
+ * and Eclipse Distribution License v1.0 which accompany this distribution.
  *
- * The Eclipse Public License is available at 
+ * The Eclipse Public License is available at
  *   http://www.eclipse.org/legal/epl-v10.html
- * and the Eclipse Distribution License is available at 
+ * and the Eclipse Distribution License is available at
  *   http://www.eclipse.org/org/documents/edl-v10.php.
  *
  * Contributors:
@@ -27,12 +27,52 @@
 
 #include <OsWrapper.h>
 
-#define ADDRESS     "tcp://m2m.eclipse.org:1883"
-#define CLIENTID    "ExampleClientPub"
-#define TOPIC       "MQTT Examples"
+#undef GOOGLE_SETTINGS
+#ifdef GOOGLE_SETTINGS
+#define ADDRESS     "ssl://mqtt.googleapis.com:8883"
+#define CLIENTID    "projects/<project-id>/locations/<regionh>/registries/<registry-id>/devices/<device-id>"
+#define TOPIC       "/devices/<your-device-id>/events"
 #define PAYLOAD     "Hello World!"
+#define PASSWORD    "<JWT-GOES-HERE>"
 #define QOS         1
 #define TIMEOUT     10000L
+#define USERNAME    "unused"
+#define RSA_PUB     "./rsa_pub.pem"
+#define RSA_PRIV    "./rsa_private.pem"
+#define KEYSTORE    "./roots.pem"
+#define USE_SSL_CONNOPTS
+#endif
+
+#undef TEST_MOSQUITO_NOSSL
+#ifdef TEST_MOSQUITO_NOSSL
+#define ADDRESS     "ssl://test.mosquitto.org:1883"
+#define CLIENTID    "TEST_PAHO_C_GUS"
+#define TOPIC       "DEVICE_EVENTS"
+#define PAYLOAD     "Hello World!"
+#define PASSWORD    ""
+#define QOS         1
+#define TIMEOUT     10000L
+#define USERNAME    ""
+#define RSA_PUB     "rsa_pub.pem"
+#define RSA_PRIV    "rsa_private.pem"
+#define KEYSTORE    "mosquitto.org.crt"
+#endif
+
+#define TEST_MOSQUITO_SSL
+#ifdef TEST_MOSQUITO_SSL
+#define ADDRESS     "tcp://test.mosquitto.org:8883"
+#define CLIENTID    "TEST_PAHO_C_GUS"
+#define TOPIC       "DEVICE_EVENTS"
+#define PAYLOAD     "Hello World!"
+#define PASSWORD    ""
+#define QOS         1
+#define TIMEOUT     10000L
+#define USERNAME    ""
+#define RSA_PUB     "rsa_pub.pem"
+#define RSA_PRIV    "rsa_private.pem"
+#define KEYSTORE    "mosquitto.org.crt"
+#define USE_SSL_CONNOPTS
+#endif
 
 volatile MQTTAsync_token deliveredtoken;
 
@@ -40,115 +80,131 @@ int finished = 0;
 
 void connlost(void *context, char *cause)
 {
-	MQTTAsync client = (MQTTAsync)context;
-	MQTTAsync_connectOptions conn_opts = MQTTAsync_connectOptions_initializer;
-	int rc;
+  MQTTAsync client = (MQTTAsync)context;
+  MQTTAsync_connectOptions conn_opts = MQTTAsync_connectOptions_initializer;
+  int rc;
 
-	printf("\nConnection lost\n");
-	printf("     cause: %s\n", cause);
+  printf("\nConnection lost\n");
+  printf("     cause: %s\n", cause);
 
-	printf("Reconnecting\n");
-	conn_opts.keepAliveInterval = 20;
-	conn_opts.cleansession = 1;
-	if ((rc = MQTTAsync_connect(client, &conn_opts)) != MQTTASYNC_SUCCESS)
-	{
-		printf("Failed to start connect, return code %d\n", rc);
- 		finished = 1;
-	}
+  printf("Reconnecting\n");
+  conn_opts.keepAliveInterval = 20;
+  conn_opts.cleansession = 1;
+  if ((rc = MQTTAsync_connect(client, &conn_opts)) != MQTTASYNC_SUCCESS)
+  {
+    printf("Failed to start connect, return code %d\n", rc);
+     finished = 1;
+  }
 }
 
 
 void onDisconnect(void* context, MQTTAsync_successData* response)
 {
-	printf("Successful disconnection\n");
-	finished = 1;
+  printf("Successful disconnection\n");
+  finished = 1;
 }
 
 
 void onSend(void* context, MQTTAsync_successData* response)
 {
-	MQTTAsync client = (MQTTAsync)context;
-	MQTTAsync_disconnectOptions opts = MQTTAsync_disconnectOptions_initializer;
-	int rc;
+  MQTTAsync client = (MQTTAsync)context;
+  MQTTAsync_disconnectOptions opts = MQTTAsync_disconnectOptions_initializer;
+  int rc;
 
-	printf("Message with token value %d delivery confirmed\n", response->token);
+  printf("Message with token value %d delivery confirmed\n", response->token);
 
-	opts.onSuccess = onDisconnect;
-	opts.context = client;
+  opts.onSuccess = onDisconnect;
+  opts.context = client;
 
-	if ((rc = MQTTAsync_disconnect(client, &opts)) != MQTTASYNC_SUCCESS)
-	{
-		printf("Failed to start sendMessage, return code %d\n", rc);
-		exit(EXIT_FAILURE);
-	}
+  if ((rc = MQTTAsync_disconnect(client, &opts)) != MQTTASYNC_SUCCESS)
+  {
+    printf("Failed to start sendMessage, return code %d\n", rc);
+    exit(EXIT_FAILURE);
+  }
 }
 
 
 void onConnectFailure(void* context, MQTTAsync_failureData* response)
 {
-	printf("Connect failed, rc %d\n", response ? response->code : 0);
-	finished = 1;
+  printf("Connect failed, rc %d\n", response ? response->code : 0);
+  finished = 1;
 }
 
 
 void onConnect(void* context, MQTTAsync_successData* response)
 {
-	MQTTAsync client = (MQTTAsync)context;
-	MQTTAsync_responseOptions opts = MQTTAsync_responseOptions_initializer;
-	MQTTAsync_message pubmsg = MQTTAsync_message_initializer;
-	int rc;
+  MQTTAsync client = (MQTTAsync)context;
+  MQTTAsync_responseOptions opts = MQTTAsync_responseOptions_initializer;
+  MQTTAsync_message pubmsg = MQTTAsync_message_initializer;
+  int rc;
 
-	printf("Successful connection\n");
-	
-	opts.onSuccess = onSend;
-	opts.context = client;
+  printf("Successful connection\n");
 
-	pubmsg.payload = PAYLOAD;
-	pubmsg.payloadlen = strlen(PAYLOAD);
-	pubmsg.qos = QOS;
-	pubmsg.retained = 0;
-	deliveredtoken = 0;
+  opts.onSuccess = onSend;
+  opts.context = client;
 
-	if ((rc = MQTTAsync_sendMessage(client, TOPIC, &pubmsg, &opts)) != MQTTASYNC_SUCCESS)
-	{
-		printf("Failed to start sendMessage, return code %d\n", rc);
-		exit(EXIT_FAILURE);
-	}
+  pubmsg.payload = PAYLOAD;
+  pubmsg.payloadlen = strlen(PAYLOAD);
+  pubmsg.qos = QOS;
+  pubmsg.retained = 0;
+  deliveredtoken = 0;
+
+  if ((rc = MQTTAsync_sendMessage(client, TOPIC, &pubmsg, &opts)) != MQTTASYNC_SUCCESS)
+  {
+    printf("Failed to start sendMessage, return code %d\n", rc);
+    exit(EXIT_FAILURE);
+  }
 }
 
 
 int main(int argc, char* argv[])
 {
-	MQTTAsync client;
-	MQTTAsync_connectOptions conn_opts = MQTTAsync_connectOptions_initializer;
-	int rc;
+  MQTTAsync client;
+  MQTTAsync_connectOptions conn_opts = MQTTAsync_connectOptions_initializer;
+  int rc;
 
-	MQTTAsync_create(&client, ADDRESS, CLIENTID, MQTTCLIENT_PERSISTENCE_NONE, NULL);
+  MQTTAsync_create(&client, ADDRESS, CLIENTID, MQTTCLIENT_PERSISTENCE_NONE, NULL);
 
-	MQTTAsync_setCallbacks(client, NULL, connlost, NULL, NULL);
+  MQTTAsync_setCallbacks(client, NULL, connlost, NULL, NULL);
 
-	conn_opts.keepAliveInterval = 20;
-	conn_opts.cleansession = 1;
-	conn_opts.onSuccess = onConnect;
-	conn_opts.onFailure = onConnectFailure;
-	conn_opts.context = client;
-	if ((rc = MQTTAsync_connect(client, &conn_opts)) != MQTTASYNC_SUCCESS)
-	{
-		printf("Failed to start connect, return code %d\n", rc);
-		exit(EXIT_FAILURE);
-	}
+  conn_opts.keepAliveInterval = 20;
+  conn_opts.cleansession = 1;
+  conn_opts.onSuccess = onConnect;
+  conn_opts.onFailure = onConnectFailure;
+  conn_opts.context = client;
+  conn_opts.keepAliveInterval = 20;
+  conn_opts.cleansession = 1;
+  conn_opts.username = USERNAME;
+  conn_opts.password = PASSWORD;
+  conn_opts.serverURIcount = 1;
+  char* serverUris[1];
+  serverUris[0] = ADDRESS;
+  conn_opts.serverURIs = serverUris;
+  MQTTAsync_SSLOptions sslopts = MQTTAsync_SSLOptions_initializer;
+  sslopts.keyStore = RSA_PUB;
+  sslopts.trustStore = KEYSTORE;
+  sslopts.privateKey = RSA_PRIV;
+  sslopts.enableServerCertAuth = 0;
+  sslopts.enabledCipherSuites = NULL;
+  #ifdef USE_SSL_CONNOPTS
+  conn_opts.ssl = &sslopts;
+  #endif
+  if ((rc = MQTTAsync_connect(client, &conn_opts)) != MQTTASYNC_SUCCESS)
+  {
+    printf("Failed to start connect, return code %d\n", rc);
+    exit(EXIT_FAILURE);
+  }
 
-	printf("Waiting for publication of %s\n"
+  printf("Waiting for publication of %s\n"
          "on topic %s for client with ClientID: %s\n",
          PAYLOAD, TOPIC, CLIENTID);
-	while (!finished)
-		#if defined(WIN32)
-			Sleep(100);
-		#else
-			usleep(10000L);
-		#endif
+  while (!finished)
+    #if defined(WIN32)
+      Sleep(100);
+    #else
+      usleep(10000L);
+    #endif
 
-	MQTTAsync_destroy(&client);
- 	return rc;
+  MQTTAsync_destroy(&client);
+   return rc;
 }
-  
